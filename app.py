@@ -200,26 +200,32 @@ with tab2:
                         sire = st.text_input("เบอร์พ่อพันธุ์", key=f"sr_{sow_id}")
                         breed_count = st.selectbox("ครั้งที่ผสม", [1, 2, 3], key=f"b_count_{sow_id}")
                         if st.form_submit_button("บันทึกการผสมพันธุ์"):
-                            exp_heat, exp_farrow = d_breed + timedelta(days=21), d_breed + timedelta(days=114)
-                            new_rec = {
-                                "Record_ID": f"{sow_id}_{current_parity+1}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M')}",
-                                "Sow_ID": sow_id, "Parity_Num": current_parity + 1,
-                                "Breed_Date": d_breed.strftime("%Y-%m-%d"), "Expected_Heat": exp_heat.strftime("%Y-%m-%d"), "Expected_Farrow": exp_farrow.strftime("%Y-%m-%d"),
-                                "Sire_ID": sire, "Breed_Count": str(breed_count),
-                                "Farrow_Date": "", "Total_Born": 0, "Born_Alive": 0, "Stillborn": 0, "Mummy": 0, "Birth_Weight": 0.0,
-                                "Wean_Date": "", "Weaned_Pigs": 0, "Wean_Weight": 0.0, "version": 1
-                            }
-                            supabase.table("production_data").insert(new_rec).execute()
-                            supabase.table("sow_data").update({"Status": "อุ้มท้อง", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
-                            st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
+                            try:
+                                exp_heat, exp_farrow = d_breed + timedelta(days=21), d_breed + timedelta(days=114)
+                                new_rec = {
+                                    "Record_ID": f"{sow_id}_{current_parity+1}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                                    "Sow_ID": sow_id, "Parity_Num": current_parity + 1,
+                                    "Breed_Date": d_breed.strftime("%Y-%m-%d"), "Expected_Heat": exp_heat.strftime("%Y-%m-%d"), "Expected_Farrow": exp_farrow.strftime("%Y-%m-%d"),
+                                    "Sire_ID": sire, "Breed_Count": str(breed_count),
+                                    "Farrow_Date": "", "Total_Born": 0, "Born_Alive": 0, "Stillborn": 0, "Mummy": 0, "Birth_Weight": 0.0,
+                                    "Wean_Date": "", "Weaned_Pigs": 0, "Wean_Weight": 0.0, "version": 1
+                                }
+                                supabase.table("production_data").insert(new_rec).execute()
+                                supabase.table("sow_data").update({"Status": "อุ้มท้อง", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
+                                st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
+                            except Exception as e:
+                                st.error("⚠️ มีการบันทึกข้อมูลนี้ซ้อนทับกัน กรุณารีเฟรชหน้าเว็บ")
 
                 # --- แจ้งกลับสัด ---
                 with sub_return:
                     st.info("ใช้กรณีที่ผสมไปแล้ว 21 วัน แต่หมูแสดงอาการเป็นสัดอีกครั้ง เพื่อยกเลิกวันรอคลอดเดิมทิ้ง")
                     if st.button("🔄 ยืนยันหมูกลับสัด (ผสมไม่ติด)", key=f"r_{sow_id}", type="primary"):
-                        supabase.table("production_data").delete().eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
-                        supabase.table("sow_data").update({"Status": "รอผสม", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
-                        st.success("นำกลับสู่รอบรอผสมแล้ว"); time.sleep(1); st.rerun()
+                        try:
+                            supabase.table("production_data").delete().eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
+                            supabase.table("sow_data").update({"Status": "รอผสม", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
+                            st.success("นำกลับสู่รอบรอผสมแล้ว"); time.sleep(1); st.rerun()
+                        except Exception as e:
+                            st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรชหน้าเว็บ")
 
                 # --- คลอดลูก ---
                 with sub2:
@@ -230,10 +236,13 @@ with tab2:
                         mummy = st.number_input("มัมมี่", min_value=0, key=f"mm_{sow_id}")
                         wt = st.number_input("น้ำหนักรวม (กก.)", min_value=0.0, step=0.1, key=f"wt_{sow_id}")
                         if st.form_submit_button("บันทึกการคลอด"):
-                            data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
-                            supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
-                            supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
-                            st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
+                            try:
+                                data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
+                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
+                                supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
+                                st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
+                            except Exception as e:
+                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- หย่านม ---
                 with sub3:
@@ -242,12 +251,15 @@ with tab2:
                         weaned = st.number_input("ลูกหย่านม", min_value=0, key=f"wp_{sow_id}")
                         wwt = st.number_input("น้ำหนักตอนหย่านม", min_value=0.0, step=0.1, key=f"wwt_{sow_id}")
                         if st.form_submit_button("บันทึกการหย่านม"):
-                            data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
-                            supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
-                            supabase.table("sow_data").update({"Status": "รอผสม", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
-                            st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
+                            try:
+                                data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
+                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
+                                supabase.table("sow_data").update({"Status": "รอผสม", "version": int(row.get("version", 1)) + 1}).eq("Sow_ID", sow_id).execute()
+                                st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
+                            except Exception as e:
+                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
-                # --- รักษาฉุกเฉิน (อัปเกรดตามบรีฟ) ---
+                # --- รักษาฉุกเฉิน ---
                 with sub4:
                     st.markdown("#### 🩺 บันทึกการรักษา / ฉีดยารายตัวฉุกเฉิน")
                     with st.form(key=f"health_{sow_id}"):
@@ -267,34 +279,40 @@ with tab2:
                             if not h_detail:
                                 st.error("กรุณาระบุชนิดยาหรืออาการ")
                             else:
-                                supabase.table("health_records").insert({
-                                    "Record_ID": f"H_{sow_id}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}", 
-                                    "Sow_ID": sow_id, "Record_Date": h_date.strftime("%Y-%m-%d"), 
-                                    "Category": h_cat, "Detail": h_detail, "Amount_CC": h_cc, "Withdrawal_Days": h_withdraw, "version": 1
-                                }).execute()
-                                st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
+                                try:
+                                    supabase.table("health_records").insert({
+                                        "Record_ID": f"H_{sow_id}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}", 
+                                        "Sow_ID": sow_id, "Record_Date": h_date.strftime("%Y-%m-%d"), 
+                                        "Category": h_cat, "Detail": h_detail, "Amount_CC": h_cc, "Withdrawal_Days": h_withdraw, "version": 1
+                                    }).execute()
+                                    st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
+                                except Exception as e:
+                                    st.error("⚠️ มีการบันทึกข้อมูลนี้ซ้อนทับกัน กรุณารีเฟรชหน้าเว็บ")
 
-                # --- สมุดประวัติรวม ---
+                # --- สมุดประวัติรวม (แก้ไข/ลบ) ---
                 with sub5:
                     with st.expander("1. ประวัติการผลิต", expanded=True):
                         sow_prod = prod_df[prod_df['Sow_ID'] == sow_id].copy()
                         if not sow_prod.empty:
                             edited_prod = st.data_editor(sow_prod, use_container_width=True, key=f"editor_prod_{sow_id}", hide_index=True, num_rows="dynamic", column_config={"Record_ID": None, "Sow_ID": None, "version": None})
                             if st.button("💾 บันทึกแก้ประวัติผลิต", key=f"save_prod_{sow_id}"):
-                                deleted_ids = set(sow_prod['Record_ID']) - set(edited_prod['Record_ID'].dropna())
-                                for d_id in deleted_ids: supabase.table("production_data").delete().eq("Record_ID", d_id).execute()
-                                for idx in edited_prod.index:
-                                    r_id = edited_prod.loc[idx, "Record_ID"]
-                                    if pd.isna(r_id): continue
-                                    orig_row = sow_prod[sow_prod['Record_ID'] == r_id].iloc[0]
-                                    if not edited_prod.loc[idx].equals(orig_row):
-                                        current_v = int(orig_row.get("version", 1))
-                                        update_data = edited_prod.loc[idx].drop(["Record_ID", "Sow_ID", "version"]).to_dict()
-                                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
-                                        update_data["version"] = current_v + 1
-                                        res = supabase.table("production_data").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
-                                        if not res.data: st.error("⚠️ ข้อมูลถูกแก้ไขโดยคนอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ"); st.stop()
-                                st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                                try:
+                                    deleted_ids = set(sow_prod['Record_ID']) - set(edited_prod['Record_ID'].dropna())
+                                    for d_id in deleted_ids: supabase.table("production_data").delete().eq("Record_ID", d_id).execute()
+                                    for idx in edited_prod.index:
+                                        r_id = edited_prod.loc[idx, "Record_ID"]
+                                        if pd.isna(r_id): continue
+                                        orig_row = sow_prod[sow_prod['Record_ID'] == r_id].iloc[0]
+                                        if not edited_prod.loc[idx].equals(orig_row):
+                                            current_v = int(orig_row.get("version", 1))
+                                            update_data = edited_prod.loc[idx].drop(["Record_ID", "Sow_ID", "version"]).to_dict()
+                                            update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                                            update_data["version"] = current_v + 1
+                                            res = supabase.table("production_data").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                                            if not res.data: st.error("⚠️ ข้อมูลถูกแก้ไขโดยคนอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ"); st.stop()
+                                    st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                                except Exception as e:
+                                    st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
                         else:
                             st.info("ยังไม่มีประวัติการผลิต")
                             
@@ -303,20 +321,23 @@ with tab2:
                         if not sow_health.empty:
                             edited_health = st.data_editor(sow_health, use_container_width=True, key=f"editor_health_{sow_id}", hide_index=True, num_rows="dynamic", column_config={"Record_ID": None, "Sow_ID": None, "version": None, "Treatment": None})
                             if st.button("💾 บันทึกแก้ประวัติสุขภาพ", key=f"save_health_{sow_id}"):
-                                deleted_ids = set(sow_health['Record_ID']) - set(edited_health['Record_ID'].dropna())
-                                for d_id in deleted_ids: supabase.table("health_records").delete().eq("Record_ID", d_id).execute()
-                                for idx in edited_health.index:
-                                    r_id = edited_health.loc[idx, "Record_ID"]
-                                    if pd.isna(r_id): continue
-                                    orig_row = sow_health[sow_health['Record_ID'] == r_id].iloc[0]
-                                    if not edited_health.loc[idx].equals(orig_row):
-                                        current_v = int(orig_row.get("version", 1))
-                                        update_data = edited_health.loc[idx].drop(["Record_ID", "Sow_ID", "version"]).to_dict()
-                                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
-                                        update_data["version"] = current_v + 1
-                                        res = supabase.table("health_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
-                                        if not res.data: st.error("⚠️ ข้อมูลถูกเขียนทับ กรุณารีเฟรช!"); st.stop()
-                                st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                                try:
+                                    deleted_ids = set(sow_health['Record_ID']) - set(edited_health['Record_ID'].dropna())
+                                    for d_id in deleted_ids: supabase.table("health_records").delete().eq("Record_ID", d_id).execute()
+                                    for idx in edited_health.index:
+                                        r_id = edited_health.loc[idx, "Record_ID"]
+                                        if pd.isna(r_id): continue
+                                        orig_row = sow_health[sow_health['Record_ID'] == r_id].iloc[0]
+                                        if not edited_health.loc[idx].equals(orig_row):
+                                            current_v = int(orig_row.get("version", 1))
+                                            update_data = edited_health.loc[idx].drop(["Record_ID", "Sow_ID", "version"]).to_dict()
+                                            update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                                            update_data["version"] = current_v + 1
+                                            res = supabase.table("health_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                                            if not res.data: st.error("⚠️ ข้อมูลถูกเขียนทับ กรุณารีเฟรช!"); st.stop()
+                                    st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                                except Exception as e:
+                                    st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
                         else:
                             st.info("ยังไม่มีประวัติสุขภาพ")
 
@@ -340,16 +361,19 @@ with tab2:
                         e_exit_reason = st.text_input("สาเหตุการตายหรือคัดทิ้ง", value=row.get('Exit_Reason', ''), key=f"ex_r_{sow_id}")
                         
                         if st.form_submit_button("💾 บันทึกการแก้ไข"):
-                            current_version = int(row.get("version", 1))
-                            update_data = {"Breed": e_breed, "Status": e_status, "Parity": e_parity, "version": current_version + 1}
-                            if e_status == "คัดทิ้ง/ตาย":
-                                update_data["Exit_Date"] = e_exit_date.strftime("%Y-%m-%d")
-                                update_data["Exit_Reason"] = e_exit_reason
-                            else:
-                                update_data["Exit_Date"] = ""; update_data["Exit_Reason"] = ""
-                            res = supabase.table("sow_data").update(update_data).eq("Sow_ID", sow_id).eq("version", current_version).execute()
-                            if not res.data: st.error("⚠️ แจ้งเตือน: สถานะของแม่หมูตัวนี้ถูกเปลี่ยนโดยผู้ใช้งานท่านอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ!")
-                            else: st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                            try:
+                                current_version = int(row.get("version", 1))
+                                update_data = {"Breed": e_breed, "Status": e_status, "Parity": e_parity, "version": current_version + 1}
+                                if e_status == "คัดทิ้ง/ตาย":
+                                    update_data["Exit_Date"] = e_exit_date.strftime("%Y-%m-%d")
+                                    update_data["Exit_Reason"] = e_exit_reason
+                                else:
+                                    update_data["Exit_Date"] = ""; update_data["Exit_Reason"] = ""
+                                res = supabase.table("sow_data").update(update_data).eq("Sow_ID", sow_id).eq("version", current_version).execute()
+                                if not res.data: st.error("⚠️ แจ้งเตือน: สถานะของแม่หมูตัวนี้ถูกเปลี่ยนโดยผู้ใช้งานท่านอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ!")
+                                else: st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
+                            except Exception as e:
+                                st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
 
 # ----------------- 4. บันทึกข้อมูลรวม (โซน/ฝูง) -----------------
 with tab3:
@@ -382,16 +406,19 @@ with tab3:
                 if zf_amount <= 0:
                     st.error("กรุณาระบุปริมาณอาหารที่มากกว่า 0")
                 else:
-                    supabase.table("zone_feed_records").insert({
-                        "Record_ID": f"ZF_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
-                        "Record_Date": zf_date.strftime("%Y-%m-%d"),
-                        "Zone_Name": zf_zone,
-                        "Feed_Type": zf_type,
-                        "Amount_KG": zf_amount,
-                        "version": 1
-                    }).execute()
-                    st.success(f"บันทึกอาหาร {zf_zone} เรียบร้อย!")
-                    time.sleep(1); st.rerun()
+                    try:
+                        supabase.table("zone_feed_records").insert({
+                            "Record_ID": f"ZF_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                            "Record_Date": zf_date.strftime("%Y-%m-%d"),
+                            "Zone_Name": zf_zone,
+                            "Feed_Type": zf_type,
+                            "Amount_KG": zf_amount,
+                            "version": 1
+                        }).execute()
+                        st.success(f"บันทึกอาหาร {zf_zone} เรียบร้อย!")
+                        time.sleep(1); st.rerun()
+                    except Exception as e:
+                        st.error("⚠️ มีการบันทึกข้อมูลซ้อนทับกัน กรุณารีเฟรชหน้าเว็บ")
 
     # --- แบบฟอร์ม 2: วัคซีนกลุ่ม ---
     with col_batch_vaccine:
@@ -412,18 +439,21 @@ with tab3:
                 if not bv_name:
                     st.error("กรุณาระบุชื่อวัคซีน")
                 else:
-                    supabase.table("batch_health_records").insert({
-                        "Record_ID": f"BV_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
-                        "Record_Date": bv_date.strftime("%Y-%m-%d"),
-                        "Target_Group": bv_group,
-                        "Vaccine_Name": bv_name,
-                        "Lot_Number": bv_lot,
-                        "version": 1
-                    }).execute()
-                    st.success("บันทึกประวัติวัคซีนกลุ่มสำเร็จ!")
-                    time.sleep(1); st.rerun()
+                    try:
+                        supabase.table("batch_health_records").insert({
+                            "Record_ID": f"BV_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                            "Record_Date": bv_date.strftime("%Y-%m-%d"),
+                            "Target_Group": bv_group,
+                            "Vaccine_Name": bv_name,
+                            "Lot_Number": bv_lot,
+                            "version": 1
+                        }).execute()
+                        st.success("บันทึกประวัติวัคซีนกลุ่มสำเร็จ!")
+                        time.sleep(1); st.rerun()
+                    except Exception as e:
+                        st.error("⚠️ มีการบันทึกข้อมูลซ้อนทับกัน กรุณารีเฟรชหน้าเว็บ")
 
-    # ================= ส่วนที่เพิ่มใหม่: ตารางประวัติย้อนหลัง =================
+    # ================= ประวัติการบันทึกย้อนหลัง =================
     st.divider()
     st.markdown("#### 🕒 ประวัติการบันทึกย้อนหลัง (สามารถแก้ไข / ลบได้)")
     st.info("💡 **ทริค:** ดับเบิ้ลคลิกที่ช่องในตารางเพื่อแก้ไขข้อความหรือตัวเลข หรือคลิกเลือกหน้าแถวแล้วกดปุ่ม **Delete** บนคีย์บอร์ดเพื่อลบทิ้ง")
@@ -432,37 +462,26 @@ with tab3:
         if not zone_feed_df.empty:
             zf_hist = zone_feed_df.sort_values(by="Record_Date", ascending=False).copy()
             edited_zf = st.data_editor(
-                zf_hist, 
-                use_container_width=True, 
-                key="editor_zone_feed", 
-                hide_index=True, 
-                num_rows="dynamic",
-                column_config={"Record_ID": None, "version": None}
+                zf_hist, use_container_width=True, key="editor_zone_feed", hide_index=True, num_rows="dynamic", column_config={"Record_ID": None, "version": None}
             )
             if st.button("💾 บันทึกการแก้ไขประวัติอาหารโซน", type="primary", key="save_zf"):
-                # ลบแถว
-                deleted_ids = set(zf_hist['Record_ID']) - set(edited_zf['Record_ID'].dropna())
-                for d_id in deleted_ids:
-                    supabase.table("zone_feed_records").delete().eq("Record_ID", d_id).execute()
-                
-                # อัปเดตแถว
-                for idx in edited_zf.index:
-                    r_id = edited_zf.loc[idx, "Record_ID"]
-                    if pd.isna(r_id): continue
-                    orig_row = zf_hist[zf_hist['Record_ID'] == r_id].iloc[0]
-                    
-                    if not edited_zf.loc[idx].equals(orig_row):
-                        current_v = int(orig_row.get("version", 1))
-                        update_data = edited_zf.loc[idx].drop(["Record_ID", "version"]).to_dict()
-                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
-                        update_data["version"] = current_v + 1
-                        
-                        res = supabase.table("zone_feed_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
-                        if not res.data:
-                            st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!")
-                            st.stop()
-                st.success("อัปเดตประวัติอาหารโซนเรียบร้อย!")
-                time.sleep(1); st.rerun()
+                try:
+                    deleted_ids = set(zf_hist['Record_ID']) - set(edited_zf['Record_ID'].dropna())
+                    for d_id in deleted_ids: supabase.table("zone_feed_records").delete().eq("Record_ID", d_id).execute()
+                    for idx in edited_zf.index:
+                        r_id = edited_zf.loc[idx, "Record_ID"]
+                        if pd.isna(r_id): continue
+                        orig_row = zf_hist[zf_hist['Record_ID'] == r_id].iloc[0]
+                        if not edited_zf.loc[idx].equals(orig_row):
+                            current_v = int(orig_row.get("version", 1))
+                            update_data = edited_zf.loc[idx].drop(["Record_ID", "version"]).to_dict()
+                            update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                            update_data["version"] = current_v + 1
+                            res = supabase.table("zone_feed_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                            if not res.data: st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!"); st.stop()
+                    st.success("อัปเดตประวัติอาหารโซนเรียบร้อย!"); time.sleep(1); st.rerun()
+                except Exception as e:
+                    st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
         else:
             st.info("ยังไม่มีประวัติการเบิกอาหารโซน")
 
@@ -470,40 +489,28 @@ with tab3:
         if not batch_health_df.empty:
             bv_hist = batch_health_df.sort_values(by="Record_Date", ascending=False).copy()
             edited_bv = st.data_editor(
-                bv_hist, 
-                use_container_width=True, 
-                key="editor_batch_vaccine", 
-                hide_index=True, 
-                num_rows="dynamic",
-                column_config={"Record_ID": None, "version": None}
+                bv_hist, use_container_width=True, key="editor_batch_vaccine", hide_index=True, num_rows="dynamic", column_config={"Record_ID": None, "version": None}
             )
             if st.button("💾 บันทึกการแก้ไขประวัติวัคซีนกลุ่ม", type="primary", key="save_bv"):
-                # ลบแถว
-                deleted_ids = set(bv_hist['Record_ID']) - set(edited_bv['Record_ID'].dropna())
-                for d_id in deleted_ids:
-                    supabase.table("batch_health_records").delete().eq("Record_ID", d_id).execute()
-                
-                # อัปเดตแถว
-                for idx in edited_bv.index:
-                    r_id = edited_bv.loc[idx, "Record_ID"]
-                    if pd.isna(r_id): continue
-                    orig_row = bv_hist[bv_hist['Record_ID'] == r_id].iloc[0]
-                    
-                    if not edited_bv.loc[idx].equals(orig_row):
-                        current_v = int(orig_row.get("version", 1))
-                        update_data = edited_bv.loc[idx].drop(["Record_ID", "version"]).to_dict()
-                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
-                        update_data["version"] = current_v + 1
-                        
-                        res = supabase.table("batch_health_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
-                        if not res.data:
-                            st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!")
-                            st.stop()
-                st.success("อัปเดตประวัติวัคซีนกลุ่มเรียบร้อย!")
-                time.sleep(1); st.rerun()
+                try:
+                    deleted_ids = set(bv_hist['Record_ID']) - set(edited_bv['Record_ID'].dropna())
+                    for d_id in deleted_ids: supabase.table("batch_health_records").delete().eq("Record_ID", d_id).execute()
+                    for idx in edited_bv.index:
+                        r_id = edited_bv.loc[idx, "Record_ID"]
+                        if pd.isna(r_id): continue
+                        orig_row = bv_hist[bv_hist['Record_ID'] == r_id].iloc[0]
+                        if not edited_bv.loc[idx].equals(orig_row):
+                            current_v = int(orig_row.get("version", 1))
+                            update_data = edited_bv.loc[idx].drop(["Record_ID", "version"]).to_dict()
+                            update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                            update_data["version"] = current_v + 1
+                            res = supabase.table("batch_health_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                            if not res.data: st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!"); st.stop()
+                    st.success("อัปเดตประวัติวัคซีนกลุ่มเรียบร้อย!"); time.sleep(1); st.rerun()
+                except Exception as e:
+                    st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
         else:
             st.info("ยังไม่มีประวัติวัคซีนกลุ่ม")
-    # =======================================================================
 
 # ----------------- 5. เพิ่มแม่พันธุ์ใหม่ -----------------
 with tab4:
@@ -523,7 +530,8 @@ with tab4:
                         "Parity": n_parity, "Status": "รอผสม", "Exit_Date": "", "Exit_Reason": "", "version": 1
                     }).execute()
                     st.success(f"เพิ่มแม่หมูเบอร์ {n_id} สำเร็จ!"); time.sleep(1); st.rerun()
-                except Exception as e: st.error(f"เบอร์หูซ้ำ หรือเกิดข้อผิดพลาด: {e}")
+                except Exception as e: 
+                    st.error(f"⚠️ เบอร์หูซ้ำ หรือมีการบันทึกซ้อนทับกัน")
 
 # ----------------- 6. ทะเบียนคัดทิ้ง/ตาย -----------------
 with tab5:
@@ -537,16 +545,19 @@ with tab5:
         edited_dead_sows = st.data_editor(dead_sows_display, use_container_width=True, disabled=["Sow_ID", "Breed"], key="editor_dead_sows", hide_index=True, column_config={"version": None})
         
         if st.button("💾 บันทึกการแก้ไขประวัติคัดทิ้ง", type="primary"):
-            for idx in edited_dead_sows.index:
-                if not edited_dead_sows.loc[idx].equals(dead_sows_display.loc[idx]):
-                    s_id = edited_dead_sows.loc[idx, "Sow_ID"]
-                    current_v = int(edited_dead_sows.loc[idx, "version"])
-                    new_date = "" if pd.isna(edited_dead_sows.loc[idx, "Exit_Date"]) else edited_dead_sows.loc[idx, "Exit_Date"]
-                    new_reason = "" if pd.isna(edited_dead_sows.loc[idx, "Exit_Reason"]) else edited_dead_sows.loc[idx, "Exit_Reason"]
-                    
-                    res = supabase.table("sow_data").update({"Exit_Date": new_date, "Exit_Reason": new_reason, "version": current_v + 1}).eq("Sow_ID", s_id).eq("version", current_v).execute()
-                    if not res.data: st.error(f"⚠️ ข้อมูลถูกแก้โดยคนอื่นไปแล้ว"); st.stop()
-            st.success("อัปเดตข้อมูลเรียบร้อย!"); time.sleep(1); st.rerun()
+            try:
+                for idx in edited_dead_sows.index:
+                    if not edited_dead_sows.loc[idx].equals(dead_sows_display.loc[idx]):
+                        s_id = edited_dead_sows.loc[idx, "Sow_ID"]
+                        current_v = int(edited_dead_sows.loc[idx, "version"])
+                        new_date = "" if pd.isna(edited_dead_sows.loc[idx, "Exit_Date"]) else edited_dead_sows.loc[idx, "Exit_Date"]
+                        new_reason = "" if pd.isna(edited_dead_sows.loc[idx, "Exit_Reason"]) else edited_dead_sows.loc[idx, "Exit_Reason"]
+                        
+                        res = supabase.table("sow_data").update({"Exit_Date": new_date, "Exit_Reason": new_reason, "version": current_v + 1}).eq("Sow_ID", s_id).eq("version", current_v).execute()
+                        if not res.data: st.error(f"⚠️ ข้อมูลถูกแก้โดยคนอื่นไปแล้ว"); st.stop()
+                st.success("อัปเดตข้อมูลเรียบร้อย!"); time.sleep(1); st.rerun()
+            except Exception as e:
+                st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรช")
             
         st.divider()
         st.markdown("#### 🔄 ยกเลิกการคัดทิ้ง หรือ ลบข้อมูลถาวร")
@@ -556,9 +567,12 @@ with tab5:
                 st.markdown("**ดึงแม่หมูกลับเข้าระบบ**")
                 undo_id = st.selectbox("เลือกเบอร์หู", dead_sows['Sow_ID'].tolist(), key="undo_id")
                 if st.form_submit_button("🔄 ยกเลิกการคัดทิ้ง"):
-                    current_v = int(dead_sows[dead_sows['Sow_ID'] == undo_id].iloc[0]['version'])
-                    supabase.table("sow_data").update({"Status": "รอผสม", "Exit_Date": "", "Exit_Reason": "", "version": current_v + 1}).eq("Sow_ID", undo_id).eq("version", current_v).execute()
-                    st.success(f"ดึงเบอร์ {undo_id} กลับเข้าระบบแล้ว"); time.sleep(1.5); st.rerun()
+                    try:
+                        current_v = int(dead_sows[dead_sows['Sow_ID'] == undo_id].iloc[0]['version'])
+                        supabase.table("sow_data").update({"Status": "รอผสม", "Exit_Date": "", "Exit_Reason": "", "version": current_v + 1}).eq("Sow_ID", undo_id).eq("version", current_v).execute()
+                        st.success(f"ดึงเบอร์ {undo_id} กลับเข้าระบบแล้ว"); time.sleep(1.5); st.rerun()
+                    except Exception as e:
+                        st.error("⚠️ ข้อมูลถูกเขียนทับ กรุณารีเฟรช")
         with col2:
             with st.form("delete_cull_form"):
                 st.markdown("**ลบข้อมูลถาวร** (ล้างประวัติทุกอย่าง)")
@@ -566,10 +580,13 @@ with tab5:
                 confirm_del = st.checkbox("ยืนยันการลบถาวร")
                 if st.form_submit_button("🚨 ลบข้อมูลถาวร"):
                     if confirm_del:
-                        supabase.table("production_data").delete().eq("Sow_ID", del_id).execute()
-                        supabase.table("health_records").delete().eq("Sow_ID", del_id).execute()
-                        supabase.table("sow_data").delete().eq("Sow_ID", del_id).execute()
-                        st.success(f"ลบข้อมูล {del_id} ถาวรแล้ว!"); time.sleep(1.5); st.rerun()
+                        try:
+                            supabase.table("production_data").delete().eq("Sow_ID", del_id).execute()
+                            supabase.table("health_records").delete().eq("Sow_ID", del_id).execute()
+                            supabase.table("sow_data").delete().eq("Sow_ID", del_id).execute()
+                            st.success(f"ลบข้อมูล {del_id} ถาวรแล้ว!"); time.sleep(1.5); st.rerun()
+                        except Exception as e:
+                            st.error("⚠️ เกิดข้อผิดพลาด")
                     else: st.error("กรุณากดยืนยันก่อนลบ")
     else:
         st.success("🎉 ยังไม่มีประวัติแม่หมูคัดทิ้งหรือตาย")
