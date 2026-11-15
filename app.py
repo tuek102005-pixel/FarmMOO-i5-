@@ -5,7 +5,7 @@ import time
 from supabase import create_client
 
 st.set_page_config(page_title="ระบบจัดการหมูแม่พันธุ์", layout="wide")
-st.title("🐖 ระบบจัดการข้อมูลสุขภาพฟาร์มหมูแม่พันธุ์ (Supabase)")
+st.title("🐖 ระบบจัดการข้อมูลสุขภาพฟาร์มหมูแม่พันธุ์")
 st.divider()
 
 # ----------------- 1. เชื่อมต่อ Supabase -----------------
@@ -353,14 +353,14 @@ with tab2:
 
 # ----------------- 4. บันทึกข้อมูลรวม (โซน/ฝูง) -----------------
 with tab3:
-    st.subheader("📝 บันทึกข้อมูลรวม (ลดภาระการจดรายตัว)")
+    st.subheader("📝 บันทึกข้อมูลรวม")
     
     col_zone_feed, col_batch_vaccine = st.columns(2)
     
     # --- แบบฟอร์ม 1: อาหารตามโซน ---
     with col_zone_feed:
         st.markdown("#### 🥣 บันทึกอาหารรวมตามโซนคอก (Weekly Feed Log)")
-        st.caption("บันทึกภาพรวมรายสัปดาห์ ไม่ต้องจดแยกรายตัว")
+        st.caption("บันทึกภาพรวมรายสัปดาห์")
         with st.form("zone_feed_form"):
             zf_date = st.date_input("วันที่เบิกใช้/บันทึก", key="zf_date")
             zf_zone = st.selectbox("เลือกโซนคอก", [
