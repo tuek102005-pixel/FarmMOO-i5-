@@ -351,13 +351,13 @@ with tab2:
                             if not res.data: st.error("⚠️ แจ้งเตือน: สถานะของแม่หมูตัวนี้ถูกเปลี่ยนโดยผู้ใช้งานท่านอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ!")
                             else: st.success("อัปเดตสำเร็จ!"); time.sleep(1); st.rerun()
 
-# ----------------- 4. บันทึกข้อมูลรวม (โซน/ฝูง) (ใหม่ล่าสุด) -----------------
+# ----------------- 4. บันทึกข้อมูลรวม (โซน/ฝูง) -----------------
 with tab3:
     st.subheader("📝 บันทึกข้อมูลรวม (ลดภาระการจดรายตัว)")
     
     col_zone_feed, col_batch_vaccine = st.columns(2)
     
-    # แบบฟอร์ม 1: อาหารตามโซน
+    # --- แบบฟอร์ม 1: อาหารตามโซน ---
     with col_zone_feed:
         st.markdown("#### 🥣 บันทึกอาหารรวมตามโซนคอก (Weekly Feed Log)")
         st.caption("บันทึกภาพรวมรายสัปดาห์ ไม่ต้องจดแยกรายตัว")
@@ -393,7 +393,7 @@ with tab3:
                     st.success(f"บันทึกอาหาร {zf_zone} เรียบร้อย!")
                     time.sleep(1); st.rerun()
 
-    # แบบฟอร์ม 2: วัคซีนกลุ่ม
+    # --- แบบฟอร์ม 2: วัคซีนกลุ่ม ---
     with col_batch_vaccine:
         st.markdown("#### 💉 การฉีดวัคซีนตามรอบโปรแกรม (Batch Vaccination)")
         st.caption("บันทึกรวดเดียวเมื่อฉีดเสร็จทั้งคอก/ทั้งกลุ่ม")
@@ -422,6 +422,88 @@ with tab3:
                     }).execute()
                     st.success("บันทึกประวัติวัคซีนกลุ่มสำเร็จ!")
                     time.sleep(1); st.rerun()
+
+    # ================= ส่วนที่เพิ่มใหม่: ตารางประวัติย้อนหลัง =================
+    st.divider()
+    st.markdown("#### 🕒 ประวัติการบันทึกย้อนหลัง (สามารถแก้ไข / ลบได้)")
+    st.info("💡 **ทริค:** ดับเบิ้ลคลิกที่ช่องในตารางเพื่อแก้ไขข้อความหรือตัวเลข หรือคลิกเลือกหน้าแถวแล้วกดปุ่ม **Delete** บนคีย์บอร์ดเพื่อลบทิ้ง")
+    
+    with st.expander("1. ประวัติการเบิกอาหารรวมตามโซน", expanded=True):
+        if not zone_feed_df.empty:
+            zf_hist = zone_feed_df.sort_values(by="Record_Date", ascending=False).copy()
+            edited_zf = st.data_editor(
+                zf_hist, 
+                use_container_width=True, 
+                key="editor_zone_feed", 
+                hide_index=True, 
+                num_rows="dynamic",
+                column_config={"Record_ID": None, "version": None}
+            )
+            if st.button("💾 บันทึกการแก้ไขประวัติอาหารโซน", type="primary", key="save_zf"):
+                # ลบแถว
+                deleted_ids = set(zf_hist['Record_ID']) - set(edited_zf['Record_ID'].dropna())
+                for d_id in deleted_ids:
+                    supabase.table("zone_feed_records").delete().eq("Record_ID", d_id).execute()
+                
+                # อัปเดตแถว
+                for idx in edited_zf.index:
+                    r_id = edited_zf.loc[idx, "Record_ID"]
+                    if pd.isna(r_id): continue
+                    orig_row = zf_hist[zf_hist['Record_ID'] == r_id].iloc[0]
+                    
+                    if not edited_zf.loc[idx].equals(orig_row):
+                        current_v = int(orig_row.get("version", 1))
+                        update_data = edited_zf.loc[idx].drop(["Record_ID", "version"]).to_dict()
+                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                        update_data["version"] = current_v + 1
+                        
+                        res = supabase.table("zone_feed_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                        if not res.data:
+                            st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!")
+                            st.stop()
+                st.success("อัปเดตประวัติอาหารโซนเรียบร้อย!")
+                time.sleep(1); st.rerun()
+        else:
+            st.info("ยังไม่มีประวัติการเบิกอาหารโซน")
+
+    with st.expander("2. ประวัติการฉีดวัคซีนกลุ่ม", expanded=False):
+        if not batch_health_df.empty:
+            bv_hist = batch_health_df.sort_values(by="Record_Date", ascending=False).copy()
+            edited_bv = st.data_editor(
+                bv_hist, 
+                use_container_width=True, 
+                key="editor_batch_vaccine", 
+                hide_index=True, 
+                num_rows="dynamic",
+                column_config={"Record_ID": None, "version": None}
+            )
+            if st.button("💾 บันทึกการแก้ไขประวัติวัคซีนกลุ่ม", type="primary", key="save_bv"):
+                # ลบแถว
+                deleted_ids = set(bv_hist['Record_ID']) - set(edited_bv['Record_ID'].dropna())
+                for d_id in deleted_ids:
+                    supabase.table("batch_health_records").delete().eq("Record_ID", d_id).execute()
+                
+                # อัปเดตแถว
+                for idx in edited_bv.index:
+                    r_id = edited_bv.loc[idx, "Record_ID"]
+                    if pd.isna(r_id): continue
+                    orig_row = bv_hist[bv_hist['Record_ID'] == r_id].iloc[0]
+                    
+                    if not edited_bv.loc[idx].equals(orig_row):
+                        current_v = int(orig_row.get("version", 1))
+                        update_data = edited_bv.loc[idx].drop(["Record_ID", "version"]).to_dict()
+                        update_data = {k: (None if pd.isna(v) else v) for k, v in update_data.items()}
+                        update_data["version"] = current_v + 1
+                        
+                        res = supabase.table("batch_health_records").update(update_data).eq("Record_ID", r_id).eq("version", current_v).execute()
+                        if not res.data:
+                            st.error("⚠️ ข้อมูลถูกเขียนทับโดยผู้ใช้อื่น กรุณารีเฟรช!")
+                            st.stop()
+                st.success("อัปเดตประวัติวัคซีนกลุ่มเรียบร้อย!")
+                time.sleep(1); st.rerun()
+        else:
+            st.info("ยังไม่มีประวัติวัคซีนกลุ่ม")
+    # =======================================================================
 
 # ----------------- 5. เพิ่มแม่พันธุ์ใหม่ -----------------
 with tab4:
