@@ -210,7 +210,7 @@ with tab2:
                                 else:
                                     exp_heat, exp_farrow = d_breed + timedelta(days=21), d_breed + timedelta(days=114)
                                     new_rec = {
-                                        "Record_ID": f"PROD_{sow_id}_{current_parity+1}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                                        "Record_ID": f"PROD_{sow_id}_{current_parity+1}",
                                         "Sow_ID": sow_id, "Parity_Num": current_parity + 1,
                                         "Breed_Date": d_breed.strftime("%Y-%m-%d"), "Expected_Heat": exp_heat.strftime("%Y-%m-%d"), "Expected_Farrow": exp_farrow.strftime("%Y-%m-%d"),
                                         "Sire_ID": sire, "Breed_Count": str(breed_count),
@@ -220,22 +220,19 @@ with tab2:
                                     supabase.table("production_data").insert(new_rec).execute()
                                     st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
                             except Exception as e:
-                                st.error("⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่")
+                                st.error("⚠️ ระบบตรวจพบข้อมูลซ้ำ! ท่านได้บันทึกการผสมพันธุ์ของรอบท้องนี้ไปแล้วครับ")
 
                 # --- แจ้งกลับสัด ---
                 with sub_return:
                     st.info("ใช้กรณีที่ผสมไปแล้ว 21 วัน แต่หมูแสดงอาการเป็นสัดอีกครั้ง เพื่อยกเลิกวันรอคลอดเดิมทิ้ง")
                     if st.button("🔄 ยืนยันหมูกลับสัด (ผสมไม่ติด)", key=f"r_{sow_id}", type="primary"):
                         try:
+                            supabase.table("production_data").delete().eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
                             current_v = int(row.get("version", 1))
-                            res = supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
-                            if not res.data:
-                                st.error("⚠️ ข้อมูลถูกบันทึกโดยเครื่องอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บ")
-                            else:
-                                supabase.table("production_data").delete().eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
-                                st.success("นำกลับสู่รอบรอผสมแล้ว"); time.sleep(1); st.rerun()
+                            supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).execute()
+                            st.success("นำกลับสู่รอบรอผสมแล้ว"); time.sleep(1); st.rerun()
                         except Exception as e:
-                            st.error("⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่")
+                            st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรชหน้าเว็บ")
 
                 # --- คลอดลูก ---
                 with sub2:
@@ -247,16 +244,13 @@ with tab2:
                         wt = st.number_input("น้ำหนักรวม (กก.)", min_value=0.0, step=0.1, key=f"wt_{sow_id}")
                         if st.form_submit_button("บันทึกการคลอด"):
                             try:
+                                data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
+                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
                                 current_v = int(row.get("version", 1))
-                                res = supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
-                                if not res.data:
-                                    st.error("⚠️ ข้อมูลแม่หมูถูกเปลี่ยนแปลงโดยเครื่องอื่นแล้ว กรุณารีเฟรชหน้าเว็บ")
-                                else:
-                                    data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
-                                    supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
-                                    st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
+                                supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": current_v + 1}).eq("Sow_ID", sow_id).execute()
+                                st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
                             except Exception as e:
-                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่")
+                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- หย่านม ---
                 with sub3:
@@ -266,16 +260,13 @@ with tab2:
                         wwt = st.number_input("น้ำหนักตอนหย่านม", min_value=0.0, step=0.1, key=f"wwt_{sow_id}")
                         if st.form_submit_button("บันทึกการหย่านม"):
                             try:
+                                data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
+                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
                                 current_v = int(row.get("version", 1))
-                                res = supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
-                                if not res.data:
-                                    st.error("⚠️ ข้อมูลถูกบันทึกโดยเครื่องอื่นไปแล้ว กรุณารีเฟรช")
-                                else:
-                                    data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
-                                    supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
-                                    st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
+                                supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).execute()
+                                st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
                             except Exception as e:
-                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่")
+                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- รักษาฉุกเฉิน ---
                 with sub4:
@@ -298,19 +289,16 @@ with tab2:
                                 st.error("กรุณาระบุชนิดยาหรืออาการ")
                             else:
                                 try:
-                                    current_v = int(row.get("version", 1))
-                                    res = supabase.table("sow_data").update({"version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
-                                    if not res.data:
-                                        st.error("⚠️ ข้อมูลถูกบันทึกโดยเครื่องอื่นไปแล้ว กรุณารีเฟรชหน้าเว็บก่อนทำรายการต่อ")
-                                    else:
-                                        supabase.table("health_records").insert({
-                                            "Record_ID": f"H_{sow_id}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}", 
-                                            "Sow_ID": sow_id, "Record_Date": h_date.strftime("%Y-%m-%d"), 
-                                            "Category": h_cat, "Detail": h_detail, "Amount_CC": h_cc, "Withdrawal_Days": h_withdraw, "version": 1
-                                        }).execute()
-                                        st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
+                                    safe_detail = "".join(c for c in h_detail if c.isalnum()) # ลบอักขระพิเศษเพื่อทำรหัส
+                                    unique_health_id = f"H_{sow_id}_{h_date.strftime('%Y%m%d')}_{safe_detail[:10]}"
+                                    supabase.table("health_records").insert({
+                                        "Record_ID": unique_health_id, 
+                                        "Sow_ID": sow_id, "Record_Date": h_date.strftime("%Y-%m-%d"), 
+                                        "Category": h_cat, "Detail": h_detail, "Amount_CC": h_cc, "Withdrawal_Days": h_withdraw, "version": 1
+                                    }).execute()
+                                    st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
                                 except Exception as e:
-                                    st.error("⚠️ เกิดข้อผิดพลาด กรุณาลองใหม่")
+                                    st.error("⚠️ ระบบตรวจพบข้อมูลซ้ำ! ประวัติการฉีดยา/โรคนี้ ถูกบันทึกของวันนี้ไปแล้วครับ")
 
                 # --- สมุดประวัติรวม (แก้ไข/ลบ) ---
                 with sub5:
@@ -404,18 +392,20 @@ with tab3:
     
     col_zone_feed, col_batch_vaccine = st.columns(2)
     
+    zone_map = {
+        "โซนหมูสาว (Gilt Pool)": "Z1",
+        "โซนผสมพันธุ์และรอผสม (Mating & Weaning Zone)": "Z2",
+        "โซนอุ้มท้อง (Gestation Zone)": "Z3",
+        "โซนคลอด / ให้นม (Farrowing / Lactation Zone)": "Z4"
+    }
+    
     # --- แบบฟอร์ม 1: อาหารตามโซน ---
     with col_zone_feed:
         st.markdown("#### 🥣 บันทึกอาหารรวมตามโซนคอก (Weekly Feed Log)")
         st.caption("บันทึกภาพรวมรายสัปดาห์ ไม่ต้องจดแยกรายตัว")
         with st.form("zone_feed_form"):
             zf_date = st.date_input("วันที่เบิกใช้/บันทึก", key="zf_date")
-            zf_zone = st.selectbox("เลือกโซนคอก", [
-                "โซนหมูสาว (Gilt Pool)",
-                "โซนผสมพันธุ์และรอผสม (Mating & Weaning Zone)",
-                "โซนอุ้มท้อง (Gestation Zone)",
-                "โซนคลอด / ให้นม (Farrowing / Lactation Zone)"
-            ])
+            zf_zone = st.selectbox("เลือกโซนคอก", list(zone_map.keys()))
             zf_type = st.selectbox("สูตรอาหารที่ใช้", [
                 "อาหารสูตรเตรียมพันธุ์",
                 "อาหารสูตรกระตุ้นการกลับสัด",
@@ -430,8 +420,9 @@ with tab3:
                     st.error("กรุณาระบุปริมาณอาหารที่มากกว่า 0")
                 else:
                     try:
+                        unique_zf_id = f"ZF_{zone_map[zf_zone]}_{zf_date.strftime('%Y%m%d')}"
                         supabase.table("zone_feed_records").insert({
-                            "Record_ID": f"ZF_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                            "Record_ID": unique_zf_id,
                             "Record_Date": zf_date.strftime("%Y-%m-%d"),
                             "Zone_Name": zf_zone,
                             "Feed_Type": zf_type,
@@ -441,7 +432,7 @@ with tab3:
                         st.success(f"บันทึกอาหาร {zf_zone} เรียบร้อย!")
                         time.sleep(1); st.rerun()
                     except Exception as e:
-                        st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรชหน้าเว็บ")
+                        st.error("⚠️ ข้อมูลซ้ำ! มีการบันทึกอาหารของโซนนี้ในวันนี้ไปแล้ว หากต้องการแก้ไขให้ไปที่ตารางประวัติด้านล่างครับ")
 
     # --- แบบฟอร์ม 2: วัคซีนกลุ่ม ---
     with col_batch_vaccine:
@@ -463,8 +454,12 @@ with tab3:
                     st.error("กรุณาระบุชื่อวัคซีน")
                 else:
                     try:
+                        safe_group = "".join(c for c in bv_group if c.isalnum())[:10]
+                        safe_vac = "".join(c for c in bv_name if c.isalnum())[:10]
+                        unique_bv_id = f"BV_{safe_group}_{safe_vac}_{bv_date.strftime('%Y%m%d')}"
+                        
                         supabase.table("batch_health_records").insert({
-                            "Record_ID": f"BV_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}",
+                            "Record_ID": unique_bv_id,
                             "Record_Date": bv_date.strftime("%Y-%m-%d"),
                             "Target_Group": bv_group,
                             "Vaccine_Name": bv_name,
@@ -474,7 +469,7 @@ with tab3:
                         st.success("บันทึกประวัติวัคซีนกลุ่มสำเร็จ!")
                         time.sleep(1); st.rerun()
                     except Exception as e:
-                        st.error("⚠️ เกิดข้อผิดพลาด กรุณารีเฟรชหน้าเว็บ")
+                        st.error("⚠️ ข้อมูลซ้ำ! มีการบันทึกวัคซีนรอบนี้ไปแล้วครับ")
 
     # ================= ประวัติการบันทึกย้อนหลัง =================
     st.divider()
@@ -554,7 +549,7 @@ with tab4:
                     }).execute()
                     st.success(f"เพิ่มแม่หมูเบอร์ {n_id} สำเร็จ!"); time.sleep(1); st.rerun()
                 except Exception as e: 
-                    st.error(f"⚠️ เบอร์หูซ้ำ หรือมีการบันทึกซ้อนทับกัน")
+                    st.error(f"⚠️ ข้อมูลซ้ำ! มีแม่หมูเบอร์นี้ในระบบแล้วครับ")
 
 # ----------------- 6. ทะเบียนคัดทิ้ง/ตาย -----------------
 with tab5:
