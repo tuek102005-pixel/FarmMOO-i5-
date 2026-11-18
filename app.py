@@ -169,6 +169,33 @@ with tab1:
             st.dataframe(alert_table.sort_values(by='📅 กำหนดเช็คกลับสัด (21วัน)'), use_container_width=True, hide_index=True)
         else:
             st.success("🎉 ปัจจุบันยังไม่มีแม่หมูที่อยู่ในระหว่างรอเช็คสัดหรือรอคลอด")
+        # ================= ส่วนที่เพิ่มใหม่: วิเคราะห์โครงสร้างฝูง =================
+    st.divider()
+    st.subheader("📊 การวิเคราะห์โครงสร้างฝูง (Herd Structure Analysis)")
+    
+    col_peak, col_warn = st.columns(2)
+    
+    if not sow_df.empty:
+        active_sows = sow_df[sow_df['Status'] != "คัดทิ้ง/ตาย"]
+        
+        with col_peak:
+            st.markdown("#### ⭐ กลุ่มดาวเด่นช่วงพีค (ท้องที่ 3 - 5)")
+            st.caption("ให้ผลผลิตสูงสุด และลูกหมูหย่านมน้ำหนักดีที่สุด")
+            peak_sows = active_sows[(active_sows['Parity'] >= 3) & (active_sows['Parity'] <= 5)].copy()
+            if not peak_sows.empty:
+                st.dataframe(peak_sows[['Sow_ID', 'Breed', 'Parity', 'Status']].rename(columns={'Sow_ID':'เบอร์หู', 'Breed':'สายพันธุ์', 'Parity':'ท้องที่', 'Status':'สถานะ'}), use_container_width=True, hide_index=True)
+            else:
+                st.info("ยังไม่มีแม่หมูในกลุ่มนี้")
+                
+        with col_warn:
+            st.markdown("#### 🚨 กลุ่มเตรียมปลดระวาง (ท้องที่ 7 ขึ้นไป)")
+            st.caption("เฝ้าระวังประสิทธิภาพตกต่ำ และควรเตรียมหมูสาวทดแทน")
+            warn_sows = active_sows[active_sows['Parity'] >= 7].copy()
+            if not warn_sows.empty:
+                st.dataframe(warn_sows[['Sow_ID', 'Breed', 'Parity', 'Status']].rename(columns={'Sow_ID':'เบอร์หู', 'Breed':'สายพันธุ์', 'Parity':'ท้องที่', 'Status':'สถานะ'}), use_container_width=True, hide_index=True)
+            else:
+                st.success("ไม่มีแม่หมูที่อายุเกินกำหนดในฝูง")
+    # =======================================================================
 
 # ----------------- 3. บันทึกข้อมูลรายตัว -----------------
 with tab2:
