@@ -269,12 +269,18 @@ with tab2:
                                 st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- รักษาฉุกเฉิน ---
+               # --- รักษาฉุกเฉิน ---
                 with sub4:
                     st.markdown("#### 🩺 บันทึกการรักษา / ฉีดยารายตัวฉุกเฉิน")
                     with st.form(key=f"health_{sow_id}"):
                         h_date = st.date_input("วันที่ฉีด/รักษา", key=f"h_date_{sow_id}")
-                        h_cat = st.radio("ประเภท", ["อาการป่วย (Disease)", "วัคซีนรายตัว (Individual Vaccine)"], key=f"h_cat_{sow_id}", horizontal=True)
-                        h_detail = st.text_input("ชนิดยา / ชนิดวัคซีน / อาการป่วย", key=f"h_det_{sow_id}")
+                        
+                        # 1. เพิ่มหมวดหมู่ "การให้ยา/รักษา" ลงไปในตัวเลือก
+                        h_cat = st.radio("ประเภท", ["อาการป่วย (Disease)", "การให้ยา/รักษา (Medication)", "วัคซีนรายตัว (Individual Vaccine)"], key=f"h_cat_{sow_id}", horizontal=True)
+                        
+                        # 2. แยกช่องกรอกให้ละเอียดขึ้น
+                        h_detail = st.text_input("ชื่อโรค / ชนิดยา / ชื่อวัคซีน", key=f"h_det_{sow_id}")
+                        h_treat = st.text_input("การรักษา / หมายเหตุเพิ่มเติม", placeholder="เช่น ฉีดเข้ากล้ามเนื้อ, ให้วิตามินเสริม", key=f"h_tr_{sow_id}")
                         
                         col_cc, col_w = st.columns(2)
                         h_cc = col_cc.number_input("ปริมาณที่ฉีด (CC / ml)", min_value=0.0, step=0.5, key=f"h_cc_{sow_id}")
@@ -286,20 +292,26 @@ with tab2:
                             
                         if st.form_submit_button("บันทึกการรักษา"):
                             if not h_detail:
-                                st.error("กรุณาระบุชนิดยาหรืออาการ")
+                                st.error("กรุณาระบุ ชื่อโรค / ชนิดยา / ชื่อวัคซีน")
                             else:
                                 try:
-                                    safe_detail = "".join(c for c in h_detail if c.isalnum()) # ลบอักขระพิเศษเพื่อทำรหัส
-                                    unique_health_id = f"H_{sow_id}_{h_date.strftime('%Y%m%d')}_{safe_detail[:10]}"
+                                    # ปรับการสร้างรหัส ID ให้ใช้วินาที ป้องกันบันทึกยา 2 ชนิดในวันเดียวกันแล้วข้อมูลซ้ำ
+                                    unique_health_id = f"H_{sow_id}_{(datetime.utcnow()+timedelta(hours=7)).strftime('%Y%m%d%H%M%S')}"
+                                    
                                     supabase.table("health_records").insert({
                                         "Record_ID": unique_health_id, 
-                                        "Sow_ID": sow_id, "Record_Date": h_date.strftime("%Y-%m-%d"), 
-                                        "Category": h_cat, "Detail": h_detail, "Amount_CC": h_cc, "Withdrawal_Days": h_withdraw, "version": 1
+                                        "Sow_ID": sow_id, 
+                                        "Record_Date": h_date.strftime("%Y-%m-%d"), 
+                                        "Category": h_cat, 
+                                        "Detail": h_detail, 
+                                        "Treatment": h_treat, 
+                                        "Amount_CC": h_cc, 
+                                        "Withdrawal_Days": h_withdraw, 
+                                        "version": 1
                                     }).execute()
                                     st.success("บันทึกสำเร็จ!"); time.sleep(1); st.rerun()
                                 except Exception as e:
-                                    st.error("⚠️ ระบบตรวจพบข้อมูลซ้ำ! ประวัติการฉีดยา/โรคนี้ ถูกบันทึกของวันนี้ไปแล้วครับ")
-
+                                    st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
                 # --- สมุดประวัติรวม (แก้ไข/ลบ) ---
                 with sub5:
                     with st.expander("1. ประวัติการผลิต", expanded=True):
