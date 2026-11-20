@@ -302,14 +302,28 @@ with tab2:
                         mummy = st.number_input("มัมมี่", min_value=0, key=f"mm_{sow_id}")
                         wt = st.number_input("น้ำหนักรวม (กก.)", min_value=0.0, step=0.1, key=f"wt_{sow_id}")
                         if st.form_submit_button("บันทึกการคลอด"):
-                            try:
-                                data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
-                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
-                                current_v = int(row.get("version", 1))
-                                supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": current_v + 1}).eq("Sow_ID", sow_id).execute()
-                                st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
-                            except Exception as e:
-                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
+                            # 1. เช็กว่ามีประวัติผสมพันธุ์รอคลอดอยู่จริงหรือไม่
+                            pending_breed = prod_df[(prod_df['Sow_ID'] == sow_id) & (prod_df['Parity_Num'] == current_parity + 1)]
+                            if pending_breed.empty:
+                                st.error("⚠️ ไม่พบประวัติการผสมพันธุ์สำหรับรอบท้องนี้ กรุณาบันทึกการผสมพันธุ์ก่อนครับ")
+                            else:
+                                # 2. เช็กความสมเหตุสมผลของวันที่คลอด (100 - 130 วันหลังผสม)
+                                breed_dt = datetime.strptime(pending_breed.iloc[0]['Breed_Date'], "%Y-%m-%d").date()
+                                gest_days = (d_farrow - breed_dt).days
+                                if gest_days < 100 or gest_days > 130:
+                                    st.error(f"⚠️ วันที่คลอดไม่สมเหตุสมผล (ห่างจากวันผสม {gest_days} วัน ปกติควรอยู่ระหว่าง 100-130 วัน)")
+                                else:
+                                    try:
+                                        current_v = int(row.get("version", 1))
+                                        res = supabase.table("sow_data").update({"Parity": current_parity + 1, "Status": "เลี้ยงลูก", "version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
+                                        if not res.data:
+                                            st.error("⚠️ ข้อมูลถูกเปลี่ยนแปลงโดยเครื่องอื่นแล้ว กรุณารีเฟรชหน้าเว็บ")
+                                        else:
+                                            data = {"Farrow_Date": d_farrow.strftime("%Y-%m-%d"), "Total_Born": alive + stillborn + mummy, "Born_Alive": alive, "Stillborn": stillborn, "Mummy": mummy, "Birth_Weight": wt}
+                                            supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity + 1).execute()
+                                            st.success("บันทึกคลอดสำเร็จ"); time.sleep(1); st.rerun()
+                                    except Exception as e:
+                                        st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- หย่านม ---
                 with sub3:
@@ -318,14 +332,27 @@ with tab2:
                         weaned = st.number_input("ลูกหย่านม", min_value=0, key=f"wp_{sow_id}")
                         wwt = st.number_input("น้ำหนักตอนหย่านม", min_value=0.0, step=0.1, key=f"wwt_{sow_id}")
                         if st.form_submit_button("บันทึกการหย่านม"):
-                            try:
-                                data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
-                                supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
-                                current_v = int(row.get("version", 1))
-                                supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).execute()
-                                st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
-                            except Exception as e:
-                                st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
+                            # 1. เช็กว่ามีประวัติการคลอดของท้องปัจจุบันอยู่จริงหรือไม่
+                            curr_farrow = prod_df[(prod_df['Sow_ID'] == sow_id) & (prod_df['Parity_Num'] == current_parity)]
+                            if curr_farrow.empty or str(curr_farrow.iloc[0]['Farrow_Date']).strip() in ["", "None", "nan"]:
+                                st.error("⚠️ ไม่พบประวัติการคลอดสำหรับรอบท้องนี้ กรุณาบันทึกการคลอดก่อนครับ")
+                            else:
+                                # 2. เช็กว่าวันหย่านมต้องไม่มาก่อนวันคลอด
+                                farrow_dt = datetime.strptime(curr_farrow.iloc[0]['Farrow_Date'], "%Y-%m-%d").date()
+                                if d_wean < farrow_dt:
+                                    st.error(f"⚠️ วันที่หย่านม ({d_wean}) ต้องไม่มาก่อนวันที่คลอด ({farrow_dt}) ครับ")
+                                else:
+                                    try:
+                                        current_v = int(row.get("version", 1))
+                                        res = supabase.table("sow_data").update({"Status": "รอผสม", "version": current_v + 1}).eq("Sow_ID", sow_id).eq("version", current_v).execute()
+                                        if not res.data:
+                                            st.error("⚠️ ข้อมูลถูกเปลี่ยนแปลงโดยเครื่องอื่นแล้ว กรุณารีเฟรชหน้าเว็บ")
+                                        else:
+                                            data = {"Wean_Date": d_wean.strftime("%Y-%m-%d"), "Weaned_Pigs": weaned, "Wean_Weight": wwt}
+                                            supabase.table("production_data").update(data).eq("Sow_ID", sow_id).eq("Parity_Num", current_parity).execute()
+                                            st.success("บันทึกหย่านมสำเร็จ"); time.sleep(1); st.rerun()
+                                    except Exception as e:
+                                        st.error("⚠️ เกิดข้อผิดพลาดในการบันทึก กรุณารีเฟรชหน้าเว็บ")
 
                 # --- รักษาฉุกเฉิน ---
                # --- รักษาฉุกเฉิน ---
@@ -380,7 +407,20 @@ with tab2:
                             if st.button("💾 บันทึกแก้ประวัติผลิต", key=f"save_prod_{sow_id}"):
                                 try:
                                     deleted_ids = set(sow_prod['Record_ID']) - set(edited_prod['Record_ID'].dropna())
-                                    for d_id in deleted_ids: supabase.table("production_data").delete().eq("Record_ID", d_id).execute()
+                                    if deleted_ids:
+                                        new_parity = current_parity
+                                        for d_id in deleted_ids:
+                                            del_row = sow_prod[sow_prod['Record_ID'] == d_id].iloc[0]
+                                            # ถ้าแถวที่ลบมีการบันทึกวันคลอดแล้ว ให้ลด Parity ลง 1
+                                            if str(del_row['Farrow_Date']).strip() not in ["", "None", "nan"]:
+                                                new_parity = max(0, new_parity - 1)
+                                            supabase.table("production_data").delete().eq("Record_ID", d_id).execute()
+                                        # ย้อนสถานะแม่หมูกลับเป็น "รอผสม" และอัปเดต Parity ให้ตรงกัน
+                                        current_sow_v = int(row.get("version", 1))
+                                        supabase.table("sow_data").update({
+                                            "Parity": new_parity, "Status": "รอผสม", "version": current_sow_v + 1
+                                        }).eq("Sow_ID", sow_id).execute()
+
                                     for idx in edited_prod.index:
                                         r_id = edited_prod.loc[idx, "Record_ID"]
                                         if pd.isna(r_id): continue
