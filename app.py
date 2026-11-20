@@ -97,40 +97,72 @@ with tab1:
         dead_sows_df = sow_df[sow_df['Status'] == "คัดทิ้ง/ตาย"]
         total_active_sows = len(active_sows_df)
         total_dead = len(dead_sows_df)
-        
-        farrowed_records = prod_df[(prod_df['Farrow_Date'] != "") & (prod_df['Farrow_Date'].notna())]
-        weaned_records = prod_df[(prod_df['Wean_Date'] != "") & (prod_df['Wean_Date'].notna())]
-        
+        culling_rate = (total_dead / len(sow_df) * 100) if len(sow_df) > 0 else 0
+
+        # กรองเฉพาะประวัติของแม่พันธุ์ปัจจุบัน (แก้บัคตัวเศษ-ตัวส่วนไม่ตรงกัน)
+        active_sow_ids = active_sows_df['Sow_ID'].tolist()
+        active_prod_df = prod_df[prod_df['Sow_ID'].isin(active_sow_ids)]
+
+        farrowed_records = active_prod_df[(active_prod_df['Farrow_Date'] != "") & (active_prod_df['Farrow_Date'].notna())].copy()
+        weaned_records = active_prod_df[(active_prod_df['Wean_Date'] != "") & (active_prod_df['Wean_Date'].notna())].copy()
+
         total_farrowed_litters = len(farrowed_records)
         total_weaned_litters = len(weaned_records)
-        
+
         lsy = total_farrowed_litters / total_active_sows if total_active_sows > 0 else 0
-        
+
+        sum_total_born = farrowed_records['Total_Born'].astype(float).sum() if not farrowed_records.empty else 0
         sum_born_alive = farrowed_records['Born_Alive'].astype(float).sum() if not farrowed_records.empty else 0
+        sum_stillborn = farrowed_records['Stillborn'].astype(float).sum() if not farrowed_records.empty else 0
+        sum_mummy = farrowed_records['Mummy'].astype(float).sum() if not farrowed_records.empty else 0
+
         avg_born_alive = sum_born_alive / total_farrowed_litters if total_farrowed_litters > 0 else 0
-        
+        stillborn_pct = (sum_stillborn / sum_total_born * 100) if sum_total_born > 0 else 0
+        mummy_pct = (sum_mummy / sum_total_born * 100) if sum_total_born > 0 else 0
+
         sum_weaned = weaned_records['Weaned_Pigs'].astype(float).sum() if not weaned_records.empty else 0
         avg_weaned = sum_weaned / total_weaned_litters if total_weaned_litters > 0 else 0
         psy = lsy * avg_weaned
-        
+
         if not weaned_records.empty:
             born_alive_for_weaned = weaned_records['Born_Alive'].astype(float).sum()
             survival_rate = (sum_weaned / born_alive_for_weaned * 100) if born_alive_for_weaned > 0 else 0
+            # คำนวณระยะเวลาเลี้ยงลูกเฉลี่ย (วัน)
+            f_dates = pd.to_datetime(weaned_records['Farrow_Date'], errors='coerce')
+            w_dates = pd.to_datetime(weaned_records['Wean_Date'], errors='coerce')
+            lact_days = (w_dates - f_dates).dt.days
+            avg_lactation = lact_days[lact_days >= 0].mean()
+            avg_lactation = 0 if pd.isna(avg_lactation) else avg_lactation
         else:
             survival_rate = 0
+            avg_lactation = 0
+
+        # คำนวณน้ำหนักเฉลี่ยต่อตัว (กก./ตัว)
+        sum_birth_wt = farrowed_records['Birth_Weight'].astype(float).sum() if not farrowed_records.empty else 0
+        avg_birth_wt = sum_birth_wt / sum_born_alive if sum_born_alive > 0 else 0
+
+        sum_wean_wt = weaned_records['Wean_Weight'].astype(float).sum() if not weaned_records.empty else 0
+        avg_wean_wt = sum_wean_wt / sum_weaned if sum_weaned > 0 else 0
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("จำนวนแม่พันธุ์ปัจจุบัน", f"{total_active_sows} ตัว", f"-{total_dead} คัดทิ้ง/ตาย")
+        col1.metric("จำนวนแม่พันธุ์ปัจจุบัน", f"{total_active_sows} ตัว", f"-{total_dead} คัดทิ้ง/ตาย ({culling_rate:.1f}%)")
         col2.metric("จำนวนครอกคลอดรวม", f"{total_farrowed_litters} ครอก")
         col3.metric("LSY (ครอก/แม่/ปี)", f"{lsy:.2f}")
         col4.metric("PSY (ลูกหย่านม/แม่/ปี)", f"{psy:.2f}")
-        
+
         st.divider()
         col5, col6, col7, col8 = st.columns(4)
         col5.metric("เฉลี่ยลูกมีชีวิต/ครอก", f"{avg_born_alive:.2f} ตัว")
         col6.metric("เฉลี่ยลูกหย่านม/ครอก", f"{avg_weaned:.2f} ตัว")
         col7.metric("อัตราลูกรอดชีวิต (%)", f"{survival_rate:.2f} %")
-        col8.metric("จำนวนลูกหย่านมรวม", f"{sum_weaned} ตัว")
+        col8.metric("วันเลี้ยงลูกเฉลี่ย", f"{avg_lactation:.1f} วัน")
+
+        st.divider()
+        col9, col10, col11, col12 = st.columns(4)
+        col9.metric("น้ำหนักแรกคลอดเฉลี่ย/ตัว", f"{avg_birth_wt:.2f} กก.")
+        col10.metric("น้ำหนักหย่านมเฉลี่ย/ตัว", f"{avg_wean_wt:.2f} กก.")
+        col11.metric("อัตราตายคลอด (%)", f"{stillborn_pct:.2f} %")
+        col12.metric("อัตรามัมมี่ (%)", f"{mummy_pct:.2f} %")
     else:
         st.info("ยังไม่มีข้อมูลเพียงพอสำหรับประมวลผลประสิทธิภาพแม่พันธุ์")
 
